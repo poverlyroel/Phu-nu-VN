@@ -23,12 +23,13 @@
   }
 
   renderer.setSize(viewportWidth, viewportHeight);
-  document.getElementById("threejs-canvas").appendChild(renderer.domElement);
+  const canvasEl = renderer.domElement;
+  document.getElementById("threejs-canvas").appendChild(canvasEl);
 
   camera.position.z = 20;
   camera.rotation.y = 0.5;
 
-  renderer.domElement.addEventListener("wheel", (event) => {
+  canvasEl.addEventListener("wheel", (event) => {
     event.preventDefault();
     camera.position.z += event.deltaY * 0.006;
     camera.position.z = Math.max(3, Math.min(camera.position.z, 50));
@@ -285,6 +286,7 @@
     shootingStars.push(star);
   }
 
+  // --- MOTION BLUR CHỈ KHI GIỮ VÀ KÉO CHUỘT ---
   let isDragging = false;
   let lastMouseX = 0;
   let lastMouseY = 0;
@@ -298,12 +300,20 @@
   let targetRotationX = manualRotationX;
   let targetRotationY = manualRotationY;
 
+  let mouseVelocity = 0;
+  let currentMotionBlur = 0;
+
+  function addMouseVelocity(deltaX, deltaY) {
+    const dist = Math.hypot(deltaX, deltaY);
+    mouseVelocity = Math.min(mouseVelocity + dist * 0.12, 5.5);
+  }
+
   function updateRotationTarget() {
     targetRotationX = manualRotationX + pointerParallaxX;
     targetRotationY = manualRotationY + pointerParallaxY;
   }
 
-  renderer.domElement.addEventListener("mousedown", (event) => {
+  canvasEl.addEventListener("mousedown", (event) => {
     isDragging = true;
     lastMouseX = event.clientX;
     lastMouseY = event.clientY;
@@ -314,15 +324,21 @@
   });
 
   window.addEventListener("mousemove", (event) => {
+    const deltaX = event.movementX || (event.clientX - lastMouseX);
+    const deltaY = event.movementY || (event.clientY - lastMouseY);
+
+    // CHỈ TÍNH MOTION BLUR KHI GIỮ VÀ KÉO CHUỘT (isDragging === true)
     if (!isDragging) {
       pointerParallaxY = ((event.clientX / window.innerWidth) - 0.5) * 0.14;
       pointerParallaxX = ((event.clientY / window.innerHeight) - 0.5) * 0.07;
       updateRotationTarget();
+      lastMouseX = event.clientX;
+      lastMouseY = event.clientY;
       return;
     }
 
-    const deltaX = event.clientX - lastMouseX;
-    const deltaY = event.clientY - lastMouseY;
+    addMouseVelocity(deltaX, deltaY);
+
     lastMouseX = event.clientX;
     lastMouseY = event.clientY;
     manualRotationY += deltaX * 0.0015;
@@ -332,7 +348,7 @@
     updateRotationTarget();
   });
 
-  renderer.domElement.addEventListener("touchstart", (event) => {
+  canvasEl.addEventListener("touchstart", (event) => {
     if (event.touches.length !== 1) return;
     isTouching = true;
     lastTouchX = event.touches[0].clientX;
@@ -350,6 +366,9 @@
     const currentTouchY = event.touches[0].clientY;
     const deltaX = currentTouchX - lastTouchX;
     const deltaY = currentTouchY - lastTouchY;
+
+    addMouseVelocity(deltaX, deltaY);
+
     lastTouchX = currentTouchX;
     lastTouchY = currentTouchY;
     manualRotationY += deltaX * 0.0015;
@@ -374,6 +393,16 @@
 
     camera.rotation.y += (targetRotationY - camera.rotation.y) * 0.08;
     camera.rotation.x += (targetRotationX - camera.rotation.x) * 0.08;
+
+    currentMotionBlur += (mouseVelocity - currentMotionBlur) * 0.12;
+    mouseVelocity *= 0.86;
+
+    if (currentMotionBlur > 0.1) {
+      canvasEl.style.filter = `blur(${currentMotionBlur.toFixed(2)}px)`;
+    } else {
+      canvasEl.style.filter = "none";
+    }
+
     const now = Date.now();
     if (ambientDustField) {
       ambientDustField.rotation.y += 0.000018;
@@ -485,7 +514,6 @@
       }
     });
 
-    // Tăng tần suất sao băng xuất hiện nhiều hơn
     if (Math.random() < 0.035) {
       spawnShootingStar();
     }
